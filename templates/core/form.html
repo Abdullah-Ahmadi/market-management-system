@@ -1,0 +1,33 @@
+{% extends 'base.html' %}{% block title %}{{ title }}{% endblock %}{% block page_title %}{{ title }}{% endblock %}{% block content %}
+<div class="row justify-content-center"><div class="col-xxl-8 col-xl-9"><div class="card panel"><div class="card-body p-4 p-md-5">
+  {% if form_note %}<div class="info-strip mb-4">{{ form_note }}</div>{% endif %}
+  <form method="post" {% if multipart %}enctype="multipart/form-data"{% endif %}>{% csrf_token %}
+    {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+    <div class="row g-3">
+      {% for field in form %}
+        <div class="{% if field.name == 'address' or field.name == 'notes' or field.name == 'reason' or field.name == 'help_message' %}col-12{% else %}col-md-6{% endif %}">
+          {% if field.field.widget.input_type == 'checkbox' %}
+            <div class="form-check form-switch form-switch-card">{{ field }}<label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label></div>
+          {% else %}
+            <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {% if field.field.widget.input_type == 'password' %}<div class="password-wrap">{{ field }}<button class="password-toggle" type="button" data-password-toggle="#{{ field.id_for_label }}" aria-label="Show password"><span class="eye-icon">◉</span></button></div>{% else %}{{ field }}{% endif %}
+          {% endif %}
+          {% if field.help_text %}<div class="form-text">{{ field.help_text|safe }}</div>{% endif %}
+          {% for e in field.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
+        </div>
+      {% endfor %}
+    </div>
+    {% if show_password_rules %}
+      <div class="password-rules mt-3" data-password-rules="#id_password1" data-password-username="#id_username">
+        <div data-rule="length"><span class="rule-dot"></span>At least 10 characters</div>
+        <div data-rule="upper"><span class="rule-dot"></span>At least one uppercase letter</div>
+        <div data-rule="lower"><span class="rule-dot"></span>At least one lowercase letter</div>
+        <div data-rule="number"><span class="rule-dot"></span>At least one number</div>
+        <div data-rule="symbol"><span class="rule-dot"></span>At least one symbol</div>
+        <div data-rule="username"><span class="rule-dot warning-dot"></span>Username similarity is allowed, but not recommended</div>
+      </div>
+    {% endif %}
+    <div class="d-flex flex-wrap gap-2 mt-4"><button class="btn {% if danger %}btn-danger{% else %}btn-primary{% endif %}">{{ submit_label|default:'Save' }}</button><button type="button" class="btn btn-light" onclick="history.back()">Cancel</button></div>
+  </form>
+</div></div></div></div>
+{% endblock %}

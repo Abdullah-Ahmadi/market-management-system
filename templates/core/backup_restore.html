@@ -1,0 +1,14 @@
+{% extends 'base.html' %}{% block title %}Restore Backup{% endblock %}{% block page_title %}Restore Backup{% endblock %}{% block content %}
+<div class="row justify-content-center"><div class="col-xl-8 col-lg-9">
+  <div class="card panel border-danger-subtle">
+    <div class="card-header panel-header"><div><h2 class="h5 mb-0">Restore MMS data</h2><small>System Administrator only</small></div></div>
+    <div class="card-body p-4 p-md-5">
+      <div class="alert alert-warning"><strong>This is a recovery operation.</strong> Current MMS business data will be replaced with the selected backup snapshot. MMS creates an automatic safety backup first.</div>
+      <form method="post" enctype="multipart/form-data">{% csrf_token %}
+        {% for field in form %}<div class="mb-4"><label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}{% for e in field.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}</div>{% endfor %}
+        <div class="d-flex flex-wrap gap-2"><button class="btn btn-danger">Validate & Restore</button><a class="btn btn-light" href="{% url 'backup_center' %}">Cancel</a></div>
+      </form>
+    </div>
+  </div>
+</div></div>
+{% endblock %}

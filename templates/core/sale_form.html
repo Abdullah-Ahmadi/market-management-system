@@ -1,0 +1,50 @@
+{% extends 'base.html' %}{% load mms_format %}{% block title %}{{ title }}{% endblock %}{% block page_title %}{{ title }}{% endblock %}{% block content %}
+<form method="post" id="saleForm" data-price-override="{% if can_override_price %}1{% else %}0{% endif %}">{% csrf_token %}
+<div class="row g-3">
+  <div class="col-xl-8">
+    <div class="card panel mb-3"><div class="card-header panel-header"><div><h3 class="h5 mb-0">Sale information</h3><small>Choose the transaction type and customer.</small></div></div><div class="card-body p-4">
+      {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+      <div class="row g-3">
+        <div class="col-md-6"><label class="form-label" for="{{ form.sale_type.id_for_label }}">Sale type</label>{{ form.sale_type }}{% for e in form.sale_type.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div>
+        {% if form.salesman.is_hidden %}{{ form.salesman }}<div class="col-md-6"><label class="form-label">Salesman</label><div class="read-only-field">{{ user.display_name }}</div></div>{% else %}<div class="col-md-6"><label class="form-label" for="{{ form.salesman.id_for_label }}">Salesman</label>{{ form.salesman }}{% for e in form.salesman.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div>{% endif %}
+        <div class="col-12" id="customerPickerBlock">
+          <label class="form-label" for="customerSearch">Customer</label>{{ form.customer }}
+          <div class="customer-search-wrap">
+            <input class="form-control" id="customerSearch" type="search" autocomplete="off" placeholder="Search customer ID, name, phone or address" value="{% if selected_customer %}{{ selected_customer.customer_code }} — {{ selected_customer.full_name }}{% endif %}">
+            <button type="button" class="search-clear" id="clearCustomer" aria-label="Clear customer">×</button>
+            <div class="customer-search-results" id="customerSearchResults" role="listbox" aria-label="Customer search results"></div>
+          </div>
+          <div class="selected-customer-card {% if not selected_customer %}d-none{% endif %}" id="selectedCustomerCard">
+            <div><strong id="selectedCustomerName">{% if selected_customer %}{{ selected_customer.full_name }}{% endif %}</strong><small id="selectedCustomerMeta">{% if selected_customer %}{{ selected_customer.customer_code }} · Zone {{ selected_customer.zone.code }}{% endif %}</small></div><span class="selected-check">✓</span>
+          </div>
+          {% for e in form.customer.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
+          <div class="form-text">Start typing and results appear automatically. No long customer dropdown is required.</div>
+        </div>
+        <div class="col-12"><label class="form-label" for="{{ form.notes.id_for_label }}">Notes</label>{{ form.notes }}{% for e in form.notes.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div>
+      </div>
+    </div></div>
+
+    <div class="card panel"><div class="card-header panel-header d-flex justify-content-between align-items-center"><div><h3 class="h5 mb-0">Products</h3><small>{% if can_override_price %}Standard price is loaded automatically; your role may override it when necessary.{% else %}Price is loaded from the product master and cannot be changed by a salesman.{% endif %}</small></div><button type="button" class="btn btn-sm btn-outline-primary" id="addItem">+ Add item</button></div>
+      <div class="card-body p-4">{{ formset.management_form }}{% if formset.non_form_errors %}<div class="alert alert-danger">{{ formset.non_form_errors }}</div>{% endif %}
+        <div id="itemRows">{% for f in formset %}
+          <div class="sale-item-row">{{ f.id }}<div class="row g-2 align-items-end">
+            <div class="col-lg-4 col-md-6"><label class="form-label">Product</label>{{ f.product }}</div>
+            <div class="col-6 col-lg-2"><label class="form-label">Qty</label>{{ f.quantity }}</div>
+            <div class="col-6 col-lg-2"><label class="form-label">Unit price {% if not can_override_price %}<span class="price-lock">Locked</span>{% endif %}</label>{{ f.unit_price }}</div>
+            <div class="col-6 col-lg-2"><label class="form-label">Discount</label>{{ f.discount }}</div>
+            <div class="col-6 col-lg-2"><label class="form-label">Line total</label><div class="line-total read-only-field text-end">0</div></div>
+            {% if f.DELETE %}<div class="d-none">{{ f.DELETE }}</div>{% endif %}
+          </div>
+          {% for field in f %}{% for e in field.errors %}<div class="text-danger small mt-1">{{ field.label }}: {{ e }}</div>{% endfor %}{% endfor %}
+          <button type="button" class="btn btn-sm btn-link text-danger p-0 mt-2 remove-item">Remove item</button>
+          </div>{% endfor %}</div>
+
+        <template id="emptyItemTemplate"><div class="sale-item-row">{{ formset.empty_form.id }}<div class="row g-2 align-items-end"><div class="col-lg-4 col-md-6"><label class="form-label">Product</label>{{ formset.empty_form.product }}</div><div class="col-6 col-lg-2"><label class="form-label">Qty</label>{{ formset.empty_form.quantity }}</div><div class="col-6 col-lg-2"><label class="form-label">Unit price {% if not can_override_price %}<span class="price-lock">Locked</span>{% endif %}</label>{{ formset.empty_form.unit_price }}</div><div class="col-6 col-lg-2"><label class="form-label">Discount</label>{{ formset.empty_form.discount }}</div><div class="col-6 col-lg-2"><label class="form-label">Line total</label><div class="line-total read-only-field text-end">0</div></div><div class="d-none">{{ formset.empty_form.DELETE }}</div></div><button type="button" class="btn btn-sm btn-link text-danger p-0 mt-2 remove-item">Remove item</button></div></template>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-xl-4"><div class="card panel sticky-xl-top sale-summary" style="top:88px"><div class="card-body p-4"><span class="text-secondary">Transaction total</span><div class="display-6 fw-bold mt-1"><small class="fs-5">{{ mms_settings.currency }}</small> <span id="grandTotal">0</span></div><hr><div class="summary-rule"><span>Pricing</span><strong>{% if can_override_price %}Editable by role{% else %}Master price locked{% endif %}</strong></div><div class="summary-rule"><span>Sale cutoff</span><strong>{{ mms_settings.salesman_edit_cutoff|time:'H:i' }}</strong></div><p class="small text-secondary mt-3">The browser shows a preview. Django validates the customer, quantities, permissions and final amount before saving.</p><button class="btn btn-primary btn-lg w-100">{% if editing %}Save correction{% else %}Submit sale{% endif %}</button><a href="{% url 'sale_list' %}" class="btn btn-light w-100 mt-2">Cancel</a></div></div></div>
+</div></form>
+{% endblock %}
+{% block scripts %}<script>window.MMS_PRODUCT_PRICE_URL="{% url 'product_price_api' 999999 %}".replace('999999','__ID__');window.MMS_CUSTOMER_SEARCH_URL="{% url 'customer_search_api' %}";</script>{% endblock %}

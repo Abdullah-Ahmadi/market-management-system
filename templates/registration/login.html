@@ -1,0 +1,25 @@
+{% extends 'base.html' %}{% block title %}Sign in{% endblock %}{% block public_content %}
+{% if request.GET.restored == '1' %}<div class="container pt-3"><div class="alert alert-success mb-0">Backup restored successfully. Please sign in using an administrator account from the restored backup.</div></div>{% endif %}
+<div class="login-page">
+  <div class="login-shell">
+    <div class="login-brand-panel">
+      <div class="login-brand-line">{% include '_brand.html' %}<div><strong>{{ mms_settings.company_short_name|default:'MMS' }}</strong><small>{{ mms_settings.company_name|default:'Market Management System' }}</small></div></div>
+      <div class="login-message"><span class="mini-kicker">SALES OPERATIONS</span><h1>Simple sales entry.<br>Clearer market decisions.</h1><p>Secure role-based access for field sales, supervisors, market management and system administration.</p></div>
+      <div class="water-ripple" aria-hidden="true"></div>
+    </div>
+    <div class="login-form-panel">
+      <div class="login-form-inner">
+        <h2>Welcome back</h2><p class="text-secondary mb-4">Sign in to continue to your workspace.</p>
+        {% if form.errors %}<div class="alert alert-danger">Your username or password is incorrect.</div>{% endif %}
+        <form method="post">{% csrf_token %}
+          <div class="mb-3"><label class="form-label" for="id_username">Username</label><input class="form-control form-control-lg" id="id_username" type="text" name="username" autocomplete="username" autofocus required></div>
+          <div class="mb-4"><label class="form-label" for="id_password">Password</label><div class="password-wrap"><input class="form-control form-control-lg" id="id_password" type="password" name="password" autocomplete="current-password" required><button class="password-toggle" type="button" data-password-toggle="#id_password" aria-label="Show password"><span class="eye-icon">◉</span></button></div></div>
+          {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+          <button class="btn btn-primary btn-lg w-100">Sign in securely</button>
+        </form>
+        <p class="login-security-note">Your access is limited by your assigned role and team scope.</p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

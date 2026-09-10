@@ -1,0 +1,28 @@
+{% extends 'base.html' %}{% block title %}Backup & Restore{% endblock %}{% block page_title %}Backup & Restore{% endblock %}{% block content %}
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="card panel h-100">
+      <div class="card-header panel-header"><div><h2 class="h5 mb-0">Create a restorable backup</h2><small>Use this package to recover MMS data through the Restore screen.</small></div></div>
+      <div class="card-body p-4">
+        <div class="backup-icon mb-3">↧</div>
+        <h3 class="h5">MMS backup package</h3>
+        <p class="text-secondary">The backup contains users and roles, zones, customers, products, sales and sale items, settings, audit history, employee profile images, and the company logo. Passwords remain stored as Django password hashes.</p>
+        <div class="security-banner mb-4"><strong>Keep it private</strong><span>A backup can contain sensitive company information. Store it in a secure location accessible only to authorized administrators.</span></div>
+        <a href="{% url 'backup_export' %}" class="btn btn-primary btn-lg">Create & Download Backup</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card panel mb-3">
+      <div class="card-header panel-header"><div><h2 class="h5 mb-0">Recover from backup</h2><small>Restore a .mmsbackup file created by MMS.</small></div></div>
+      <div class="card-body p-4"><p class="text-secondary">Restore replaces current MMS business data with the selected snapshot. Before applying it, MMS automatically saves a pre-restore safety backup on the server.</p><a href="{% url 'backup_restore' %}" class="btn btn-outline-danger">Open Restore</a></div>
+    </div>
+    <div class="card panel">
+      <div class="card-header panel-header"><h3 class="h6 mb-0">Automatic safety copies</h3></div>
+      <div class="card-body p-3">
+        {% if safety_backups %}<ul class="backup-file-list mb-0">{% for item in safety_backups %}<li><span>{{ item.name }}</span><small>Server-side pre-restore copy</small></li>{% endfor %}</ul>{% else %}<p class="text-secondary small mb-0">No pre-restore safety copies have been created yet.</p>{% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: market-management-system-mms
+    runtime: python
+    plan: free
+    buildCommand: bash build.sh
+    startCommand: bash start.sh
+    healthCheckPath: /accounts/login/
+    autoDeployTrigger: commit
+    envVars:
+      - key: DJANGO_DEBUG
+        value: "False"
+      - key: DJANGO_SECURE_SSL_REDIRECT
+        value: "True"
+      - key: DJANGO_TIME_ZONE
+        value: Asia/Kabul
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: MMS_ADMIN_USERNAME
+        sync: false
+      - key: MMS_ADMIN_PASSWORD
+        sync: false

@@ -1,0 +1,85 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <title>{% block title %}MMS{% endblock %} · {{ mms_settings.company_name|default:'Market Management System' }}</title>
+  <link rel="stylesheet" href="{% static 'vendor/bootstrap.min.css' %}">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+{% if user.is_authenticated %}
+<div class="app-shell">
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+  <aside class="sidebar" id="sidebar" aria-label="Main navigation">
+    <div class="brand-wrap">
+      {% include '_brand.html' %}
+      <div class="brand-copy">
+        <strong>{{ mms_settings.company_short_name|default:'MMS' }}</strong>
+        <small>{{ mms_settings.company_tagline|default:'Market Management System' }}</small>
+      </div>
+      <button class="sidebar-close d-lg-none" id="sidebarClose" type="button" aria-label="Close navigation">×</button>
+    </div>
+
+    <nav class="nav flex-column gap-1 mt-4">
+      <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}"><span>Overview</span></a>
+      <a class="nav-link nav-primary {% if request.resolver_match.url_name == 'sale_create' %}active{% endif %}" href="{% url 'sale_create' %}"><span>Record Sale</span></a>
+      <a class="nav-link {% if 'sale' in request.resolver_match.url_name and request.resolver_match.url_name != 'sale_create' %}active{% endif %}" href="{% url 'sale_list' %}"><span>Sales</span></a>
+      <a class="nav-link {% if 'customer' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'customer_list' %}"><span>Customers</span></a>
+      <a class="nav-link {% if 'product' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'product_list' %}"><span>Products</span></a>
+      <a class="nav-link {% if request.resolver_match.url_name == 'reports' %}active{% endif %}" href="{% url 'reports' %}"><span>Reports & Analytics</span></a>
+
+      {% if ui_can_manage_users %}<div class="nav-section">Administration</div><a class="nav-link {% if 'user_' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'user_list' %}"><span>Users & Team</span></a>{% endif %}
+      {% if ui_can_view_zones %}<a class="nav-link {% if 'zone' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'zone_list' %}"><span>Zones</span></a>{% endif %}
+      {% if user.is_superuser or user.role.code == 'ADMIN' %}
+        <a class="nav-link {% if 'role_' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'role_list' %}"><span>Roles & Privileges</span></a>
+        <a class="nav-link {% if 'audit' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'audit_list' %}"><span>Audit Log</span></a>
+        <a class="nav-link {% if request.resolver_match.url_name == 'settings' %}active{% endif %}" href="{% url 'settings' %}"><span>Settings</span></a>
+      {% endif %}
+      {% if ui_can_backup %}<a class="nav-link {% if 'backup' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'backup_center' %}"><span>Backup & Restore</span></a>{% endif %}
+
+      <div class="nav-section">Support</div>
+      <a class="nav-link {% if request.resolver_match.url_name == 'help' %}active{% endif %}" href="{% url 'help' %}"><span>Help & Guide</span></a>
+    </nav>
+
+    <div class="sidebar-user mt-auto">
+      <a href="{% url 'profile' %}" class="user-summary">
+        {% if user.profile_picture %}<img src="{{ user.profile_picture.url }}" alt="" class="user-avatar">{% else %}<span class="user-avatar user-avatar-placeholder">{{ user.display_name|slice:':1'|upper }}</span>{% endif %}
+        <span class="min-w-0"><strong class="text-truncate">{{ user.display_name }}</strong><small>{{ user.role.name|default:'User' }}</small></span>
+      </a>
+      <form method="post" action="{% url 'logout' %}" class="mt-2">{% csrf_token %}<button class="btn btn-sidebar w-100">Sign out</button></form>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="icon-button d-lg-none" id="sidebarToggle" type="button" aria-label="Open navigation">☰</button>
+        {% if mms_back_url %}
+          <a class="btn btn-back" href="{{ mms_back_url }}" aria-label="Go back">
+            <span class="btn-back-arrow" aria-hidden="true">←</span><span class="btn-back-label">Back</span>
+          </a>
+        {% endif %}
+        <div class="min-w-0"><div class="page-heading text-truncate">{% block page_title %}Market Management System{% endblock %}</div><small class="topbar-clock" id="liveClock"></small></div>
+      </div>
+      <div class="topbar-actions">
+        <a class="btn btn-ghost d-none d-sm-inline-flex" href="{% url 'help' %}">Help</a>
+        <a class="btn btn-primary" href="{% url 'sale_create' %}"><span class="d-none d-sm-inline">+ Record sale</span><span class="d-sm-none">+ Sale</span></a>
+      </div>
+    </header>
+    <div class="content-wrap">
+      {% for message in messages %}<div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">{{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>{% endfor %}
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+</div>
+{% else %}{% block public_content %}{% endblock %}{% endif %}
+<script src="{% static 'vendor/bootstrap.bundle.min.js' %}"></script>
+<script src="{% static 'js/app.js' %}"></script>
+<script src="{% static 'js/charts.js' %}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
