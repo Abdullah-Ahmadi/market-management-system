@@ -39,13 +39,17 @@ from .permissions import (
     can_backup,
     can_edit_sale,
     can_export,
+    can_manage_customers,
     can_manage_market,
     can_manage_settings,
     can_manage_users,
     can_override_price,
+    can_use_sales,
     can_view_audit,
     is_admin,
     is_management,
+    is_monitor,
+    is_salesman,
     is_supervisor,
     visible_customers,
     visible_sales,
@@ -82,6 +86,8 @@ def _allowed_salesmen(user):
     qs = User.objects.filter(role__code=Role.SALESMAN, is_active=True).select_related('zone', 'supervisor')
     if is_supervisor(user):
         return qs.filter(supervisor=user)
+    if is_monitor(user):
+        return qs.filter(zone_id=user.zone_id)
     if not is_management(user):
         return qs.filter(pk=user.pk)
     return qs
@@ -332,6 +338,8 @@ def _daily_sales_matrix_rows(qs, start, end, user, salesman_id='', zone_id=''):
 
 @login_required
 def dashboard(request):
+    if is_monitor(request.user):
+        return redirect('monitoring_list')
     qs = visible_sales(
         Sale.objects.select_related('salesman', 'customer', 'salesman__zone').prefetch_related('items__product'),
         request.user,
@@ -440,15 +448,16 @@ def customer_list(request):
 
 @login_required
 def customer_create(request):
+    if not can_manage_customers(request.user):
+        raise PermissionDenied('Salesmen can select existing customers but cannot create customer records.')
     initial = {}
-    if not is_management(request.user) and not is_supervisor(request.user):
-        initial = {'zone': request.user.zone, 'assigned_salesman': request.user}
+    if is_monitor(request.user):
+        initial = {'zone': request.user.zone}
     form = CustomerForm(request.POST or None, user=request.user, initial=initial)
     if form.is_valid():
         obj = form.save(commit=False)
         obj.created_by = request.user
-        if not is_management(request.user) and not is_supervisor(request.user):
-            obj.assigned_salesman = request.user
+        if is_monitor(request.user):
             obj.zone = request.user.zone
         obj.full_clean()
         obj.save()
@@ -484,6 +493,8 @@ def customer_detail(request, pk):
 
 @login_required
 def customer_edit(request, pk):
+    if not can_manage_customers(request.user):
+        raise PermissionDenied('Salesmen can view customers but cannot edit customer records.')
     obj = get_object_or_404(visible_customers(Customer.objects.all(), request.user), pk=pk)
     form = CustomerForm(request.POST or None, instance=obj, user=request.user)
     if form.is_valid():
@@ -522,6 +533,7 @@ def customer_search_api(request):
         if sid not in allowed_ids:
             return JsonResponse({'results': []})
         qs = qs.filter(assigned_salesman_id=sid)
+    browse_all = request.GET.get('all', '').strip() == '1'
     if query:
         qs = qs.filter(
             Q(customer_code__icontains=query)
@@ -529,8 +541,10 @@ def customer_search_api(request):
             | Q(phone_number__icontains=query)
             | Q(address__icontains=query)
         )
-    else:
+    elif not browse_all:
         qs = qs.none()
+    qs = qs.order_by('customer_code')
+    result_qs = qs if browse_all else qs[: settings.customer_search_limit]
     data = [
         {
             'id': c.id,
@@ -540,7 +554,7 @@ def customer_search_api(request):
             'address': c.address,
             'zone': c.zone.code,
         }
-        for c in qs[: settings.customer_search_limit]
+        for c in result_qs
     ]
     return JsonResponse({'results': data})
 
@@ -643,6 +657,8 @@ def product_edit(request, pk):
 
 @login_required
 def sale_list(request):
+    if not can_use_sales(request.user):
+        raise PermissionDenied('Monitor accounts do not access sales records.')
     qs = visible_sales(
         Sale.objects.select_related('salesman', 'customer').prefetch_related('items'), request.user
     )
@@ -682,21 +698,25 @@ def sale_list(request):
     )
 
 
-def _sale_formset(request, sale, sale_type):
+def _sale_formset(request, sale, pricing_mode):
     return SaleItemFormSet(
         request.POST or None,
         instance=sale,
         prefix='items',
-        form_kwargs={'user': request.user, 'sale_type': sale_type},
+        form_kwargs={'user': request.user, 'pricing_mode': pricing_mode},
     )
 
 
 @login_required
 def sale_create(request):
+    if not can_use_sales(request.user):
+        raise PermissionDenied('Monitor accounts do not record sales.')
     sale = Sale(salesman=request.user, created_by=request.user)
     form = SaleForm(request.POST or None, instance=sale, user=request.user)
-    sale_type = request.POST.get('sale_type') or Sale.CUSTOMER
-    formset = _sale_formset(request, sale, sale_type)
+    pricing_mode = request.POST.get('pricing_mode') or sale.pricing_mode or Sale.WHOLESALE
+    if pricing_mode not in {Sale.WHOLESALE, Sale.RETAIL}:
+        pricing_mode = Sale.WHOLESALE
+    formset = _sale_formset(request, sale, pricing_mode)
     if request.method == 'POST' and form.is_valid() and formset.is_valid():
         with transaction.atomic():
             obj = save_sale(sale=sale, sale_form=form, item_formset=formset, user=request.user)
@@ -719,6 +739,8 @@ def sale_create(request):
 
 @login_required
 def sale_detail(request, pk):
+    if not can_use_sales(request.user):
+        raise PermissionDenied('Monitor accounts do not access sales records.')
     obj = get_object_or_404(
         visible_sales(
             Sale.objects.select_related('salesman', 'customer').prefetch_related('items__product'),
@@ -737,13 +759,17 @@ def sale_detail(request, pk):
 
 @login_required
 def sale_edit(request, pk):
+    if not can_use_sales(request.user):
+        raise PermissionDenied('Monitor accounts do not edit sales records.')
     obj = get_object_or_404(visible_sales(Sale.objects.all(), request.user), pk=pk)
     if not can_edit_sale(request.user, obj):
         raise PermissionDenied('This transaction is outside your permitted correction window.')
     old = sale_snapshot(obj)
     form = SaleForm(request.POST or None, instance=obj, user=request.user)
-    sale_type = request.POST.get('sale_type') or obj.sale_type
-    formset = _sale_formset(request, obj, sale_type)
+    pricing_mode = request.POST.get('pricing_mode') or obj.pricing_mode
+    if pricing_mode not in {Sale.WHOLESALE, Sale.RETAIL}:
+        pricing_mode = obj.pricing_mode
+    formset = _sale_formset(request, obj, pricing_mode)
     if request.method == 'POST' and form.is_valid() and formset.is_valid():
         with transaction.atomic():
             obj = save_sale(sale=obj, sale_form=form, item_formset=formset, user=request.user)
@@ -768,6 +794,8 @@ def sale_edit(request, pk):
 
 @login_required
 def sale_void(request, pk):
+    if not can_use_sales(request.user):
+        raise PermissionDenied('Monitor accounts do not edit sales records.')
     obj = get_object_or_404(visible_sales(Sale.objects.all(), request.user), pk=pk)
     if not can_edit_sale(request.user, obj):
         raise PermissionDenied
@@ -798,15 +826,15 @@ def sale_void(request, pk):
 @login_required
 def product_price_api(request, pk):
     p = get_object_or_404(Product, pk=pk, is_active=True)
-    sale_type = request.GET.get('sale_type', Sale.CUSTOMER)
-    if sale_type not in {Sale.CUSTOMER, Sale.GENERAL}:
-        sale_type = Sale.CUSTOMER
+    pricing_mode = request.GET.get('pricing_mode', Sale.WHOLESALE)
+    if pricing_mode not in {Sale.WHOLESALE, Sale.RETAIL}:
+        pricing_mode = Sale.WHOLESALE
     return JsonResponse(
         {
             'id': p.pk,
             'wholesale_price': str(p.wholesale_price),
             'retail_price': str(p.retail_price),
-            'price': str(p.standard_price(sale_type)),
+            'price': str(p.price_for_mode(pricing_mode)),
             'unit': p.unit,
             'size': p.size,
             'price_locked': not can_override_price(request.user),
