@@ -34,7 +34,18 @@ from .forms import (
     VoidSaleForm,
     ZoneForm,
 )
-from .models import AuditLog, Customer, Product, Role, Sale, SaleItem, SystemSetting, User, Zone
+from .models import (
+    AuditLog,
+    Customer,
+    MonitorReport,
+    Product,
+    Role,
+    Sale,
+    SaleItem,
+    SystemSetting,
+    User,
+    Zone,
+)
 from .permissions import (
     can_backup,
     can_edit_sale,
@@ -1187,13 +1198,48 @@ def user_list(request):
 def user_detail(request, pk):
     if not can_manage_users(request.user):
         raise PermissionDenied
-    obj = get_object_or_404(User.objects.select_related('role', 'zone', 'supervisor'), pk=pk)
+    obj = get_object_or_404(
+        User.objects.select_related('role', 'zone', 'supervisor', 'manager'),
+        pk=pk,
+    )
     sales = obj.sales.exclude(status=Sale.VOIDED)
-    summary = sales.aggregate(total=Sum('total_amount'), transactions=Count('id'), average=Avg('total_amount'))
+    summary = sales.aggregate(
+        total=Sum('total_amount'),
+        transactions=Count('id'),
+        average=Avg('total_amount'),
+    )
+    monitor_summary = None
+    recent_monitoring = None
+    if obj.role_code() == Role.MONITOR:
+        monitor_reports = MonitorReport.objects.filter(monitor=obj).select_related(
+            'salesman', 'zone'
+        )
+        monitor_summary = monitor_reports.aggregate(
+            reports=Count('id', distinct=True),
+            shops=Count('visits', distinct=True),
+            chillers=Count(
+                'visits',
+                filter=Q(visits__has_company_chiller=True),
+                distinct=True,
+            ),
+            follow_ups=Count(
+                'visits',
+                filter=Q(visits__follow_up_required=True),
+                distinct=True,
+            ),
+        )
+        monitor_summary['salesmen'] = monitor_reports.values('salesman_id').distinct().count()
+        recent_monitoring = monitor_reports[:15]
     return render(
         request,
         'core/user_detail.html',
-        {'employee': obj, 'summary': summary, 'recent_sales': sales[:15]},
+        {
+            'employee': obj,
+            'summary': summary,
+            'recent_sales': sales[:15],
+            'monitor_summary': monitor_summary,
+            'recent_monitoring': recent_monitoring,
+        },
     )
 
 
