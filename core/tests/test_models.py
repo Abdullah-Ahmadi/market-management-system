@@ -71,6 +71,21 @@ class MMSModelTests(TestCase):
         item = SaleItem.objects.create(sale=sale, product=self.product, quantity=Decimal('3'), unit_price=Decimal('100'), discount=Decimal('25'))
         self.assertEqual(item.line_total, Decimal('275'))
 
+    def test_sale_item_requires_positive_whole_case_quantity(self):
+        sale = Sale.objects.create(salesman=self.s1, sale_type=Sale.GENERAL, created_by=self.s1)
+        fractional = SaleItem(
+            sale=sale, product=self.product, quantity=Decimal('0.5'),
+            unit_price=Decimal('100'), discount=Decimal('0')
+        )
+        with self.assertRaises(ValidationError):
+            fractional.full_clean()
+
+        whole = SaleItem(
+            sale=sale, product=self.product, quantity=Decimal('2'),
+            unit_price=Decimal('100'), discount=Decimal('0')
+        )
+        whole.full_clean()
+
     def test_scope_prevents_other_salesman_access(self):
         a = Sale.objects.create(salesman=self.s1, sale_type=Sale.GENERAL, created_by=self.s1)
         b = Sale.objects.create(salesman=self.s2, sale_type=Sale.GENERAL, created_by=self.s2)
