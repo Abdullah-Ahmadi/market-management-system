@@ -26,11 +26,14 @@
 
     <nav class="nav flex-column gap-1 mt-4">
       <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}"><span>Overview</span></a>
-      <a class="nav-link nav-primary {% if request.resolver_match.url_name == 'sale_create' %}active{% endif %}" href="{% url 'sale_create' %}"><span>Record Sale</span></a>
-      <a class="nav-link {% if 'sale' in request.resolver_match.url_name and request.resolver_match.url_name != 'sale_create' %}active{% endif %}" href="{% url 'sale_list' %}"><span>Sales</span></a>
+      {% if ui_can_record_sales %}
+        <a class="nav-link nav-primary {% if request.resolver_match.url_name == 'sale_create' %}active{% endif %}" href="{% url 'sale_create' %}"><span>Record Sale</span></a>
+        <a class="nav-link {% if 'sale' in request.resolver_match.url_name and request.resolver_match.url_name != 'sale_create' %}active{% endif %}" href="{% url 'sale_list' %}"><span>Sales</span></a>
+      {% endif %}
       <a class="nav-link {% if 'customer' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'customer_list' %}"><span>Customers</span></a>
       <a class="nav-link {% if 'product' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'product_list' %}"><span>Products</span></a>
-      <a class="nav-link {% if request.resolver_match.url_name == 'reports' %}active{% endif %}" href="{% url 'reports' %}"><span>Reports & Analytics</span></a>
+      {% if ui_can_record_sales %}<a class="nav-link {% if request.resolver_match.url_name == 'reports' %}active{% endif %}" href="{% url 'reports' %}"><span>Reports & Analytics</span></a>{% endif %}
+      {% if ui_can_view_monitoring %}<a class="nav-link {% if 'monitoring' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'monitoring_list' %}"><span>Field Monitoring</span></a>{% endif %}
 
       {% if ui_can_manage_users %}<div class="nav-section">Administration</div><a class="nav-link {% if 'user_' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'user_list' %}"><span>Users & Team</span></a>{% endif %}
       {% if ui_can_view_zones %}<a class="nav-link {% if 'zone' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'zone_list' %}"><span>Zones</span></a>{% endif %}
@@ -67,7 +70,7 @@
       </div>
       <div class="topbar-actions">
         <a class="btn btn-ghost d-none d-sm-inline-flex" href="{% url 'help' %}">Help</a>
-        <a class="btn btn-primary" href="{% url 'sale_create' %}"><span class="d-none d-sm-inline">+ Record sale</span><span class="d-sm-none">+ Sale</span></a>
+        {% if ui_can_record_sales %}<a class="btn btn-primary" href="{% url 'sale_create' %}"><span class="d-none d-sm-inline">+ Record sale</span><span class="d-sm-none">+ Sale</span></a>{% elif ui_can_view_monitoring %}<a class="btn btn-primary" href="{% url 'monitoring_create' %}"><span class="d-none d-sm-inline">+ Monitoring report</span><span class="d-sm-none">+ Report</span></a>{% endif %}
       </div>
     </header>
     <div class="content-wrap">
