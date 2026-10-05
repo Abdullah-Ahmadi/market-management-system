@@ -264,9 +264,13 @@ def monitoring_edit(request, pk):
         updated = form.save(commit=False)
         if is_monitor(request.user):
             updated.monitor = request.user
-        updated.zone = updated.monitor.zone
 
-        if _validate_visit_salesman(formset, updated.salesman):
+        if not updated.monitor.zone_id:
+            form.add_error('monitor', 'The monitor must have an assigned zone.')
+        else:
+            updated.zone = updated.monitor.zone
+
+        if not form.errors and _validate_visit_salesman(formset, updated.salesman):
             with transaction.atomic():
                 updated.full_clean()
                 updated.save()
