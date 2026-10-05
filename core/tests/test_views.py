@@ -12,6 +12,7 @@ class MMSViewSecurityTests(TestCase):
     def setUp(self):
         self.sales_role = Role.objects.create(code=Role.SALESMAN, name='Salesman')
         self.sup_role = Role.objects.create(code=Role.SUPERVISOR, name='Supervisor')
+        self.monitor_role = Role.objects.create(code=Role.MONITOR, name='Monitor')
         self.manager_role = Role.objects.create(code=Role.MANAGER, name='Manager', can_view_all_sales=True, can_manage_market_data=True, can_export=True)
         self.clerk_role = Role.objects.create(code=Role.CLERK, name='Sales Clerk', can_view_all_sales=True, can_manage_market_data=True, can_export=True)
         self.admin_role = Role.objects.create(code=Role.ADMIN, name='System Admin', can_view_all_sales=True, can_manage_market_data=True, can_manage_users=True, can_export=True, can_backup=True)
@@ -22,6 +23,10 @@ class MMSViewSecurityTests(TestCase):
         self.a = User.objects.create_user('a', password='StrongTest!123', role=self.sales_role, zone=self.zone, supervisor=self.sup)
         self.b = User.objects.create_user('b', password='StrongTest!123', role=self.sales_role, zone=self.zone, supervisor=self.sup)
         self.manager = User.objects.create_user('manager', password='StrongTest!123', role=self.manager_role)
+        self.monitor = User.objects.create_user(
+            'monitor', password='StrongTest!123', role=self.monitor_role,
+            zone=self.zone, manager=self.manager
+        )
         self.clerk = User.objects.create_user('clerk', password='StrongTest!123', role=self.clerk_role)
         self.admin = User.objects.create_user('admin', password='StrongTest!123', role=self.admin_role, is_superuser=True, is_staff=True)
         self.customer_a = Customer.objects.create(full_name='Alpha Shop', phone_number='0700', address='Market', zone=self.zone, assigned_salesman=self.a, created_by=self.a)
@@ -29,9 +34,11 @@ class MMSViewSecurityTests(TestCase):
         self.sale = Sale.objects.create(salesman=self.a, sale_type=Sale.GENERAL, created_by=self.a)
         self.product = Product.objects.create(name='Pepsi', size='330 ml', unit='carton', wholesale_price=Decimal('10'), retail_price=Decimal('12'))
 
-    def _sale_payload(self, salesman, sale_type='GENERAL', customer='', price='999'):
+    def _sale_payload(self, salesman, sale_type='GENERAL', customer='', price='999', pricing_mode=None):
+        pricing_mode = pricing_mode or (Sale.RETAIL if sale_type == Sale.GENERAL else Sale.WHOLESALE)
         return {
             'sale_type': sale_type,
+            'pricing_mode': pricing_mode,
             'customer': str(customer) if customer else '',
             'salesman': str(salesman.pk),
             'notes': 'test',
@@ -71,6 +78,63 @@ class MMSViewSecurityTests(TestCase):
         self.assertEqual(response.status_code, 302)
         sale = Sale.objects.exclude(pk=self.sale.pk).get()
         self.assertEqual(sale.items.get().unit_price, Decimal('10'))
+        self.assertEqual(sale.pricing_mode, Sale.WHOLESALE)
+
+    def test_salesman_can_choose_retail_for_registered_customer(self):
+        self.client.login(username='a', password='StrongTest!123')
+        payload = self._sale_payload(
+            self.a, 'CUSTOMER', self.customer_a.pk, '999', pricing_mode=Sale.RETAIL
+        )
+        response = self.client.post(reverse('sale_create'), payload)
+        self.assertEqual(response.status_code, 302)
+        sale = Sale.objects.exclude(pk=self.sale.pk).get()
+        self.assertEqual(sale.items.get().unit_price, Decimal('12'))
+        self.assertEqual(sale.pricing_mode, Sale.RETAIL)
+
+    def test_fractional_quantity_is_rejected(self):
+        self.client.login(username='a', password='StrongTest!123')
+        payload = self._sale_payload(self.a)
+        payload['items-0-quantity'] = '0.5'
+        response = self.client.post(reverse('sale_create'), payload)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Sale.objects.count(), 1)
+
+    def test_browse_all_customers_is_scoped(self):
+        self.client.login(username='a', password='StrongTest!123')
+        response = self.client.get(reverse('customer_search_api'), {'all': '1'})
+        ids = {r['id'] for r in response.json()['results']}
+        self.assertIn(self.customer_a.id, ids)
+        self.assertNotIn(self.customer_b.id, ids)
+
+    def test_salesman_cannot_create_or_edit_customer(self):
+        self.client.login(username='a', password='StrongTest!123')
+        self.assertEqual(self.client.get(reverse('customer_create')).status_code, 403)
+        self.assertEqual(
+            self.client.get(reverse('customer_edit', args=[self.customer_a.pk])).status_code,
+            403,
+        )
+
+    def test_monitor_has_monitoring_and_customer_access_but_no_sales_access(self):
+        self.client.login(username='monitor', password='StrongTest!123')
+        self.assertEqual(self.client.get(reverse('monitoring_list')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('customer_create')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('sale_list')).status_code, 403)
+        self.assertEqual(self.client.get(reverse('sale_create')).status_code, 403)
+
+    def test_manager_sees_only_monitor_reports_from_direct_monitors(self):
+        from core.models import MonitorReport
+
+        report = MonitorReport.objects.create(
+            monitor=self.monitor,
+            salesman=self.a,
+            zone=self.zone,
+            report_date='2026-10-05',
+        )
+        self.client.login(username='manager', password='StrongTest!123')
+        response = self.client.get(reverse('monitoring_list'))
+        self.assertContains(response, self.monitor.display_name)
+        self.assertContains(response, self.a.display_name)
+        self.assertEqual(report.monitor.manager_id, self.manager.id)
 
     def test_manager_can_override_unit_price(self):
         self.client.login(username='manager', password='StrongTest!123')
