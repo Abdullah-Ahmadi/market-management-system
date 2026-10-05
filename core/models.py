@@ -190,10 +190,14 @@ class User(AbstractUser):
                     {'supervisor': 'The salesman supervisor must match the supervisor assigned to the zone.'}
                 )
         if self.role and self.role.code == Role.MONITOR:
+            if self.supervisor_id:
+                raise ValidationError({'supervisor': 'A monitor is independent of the supervisor hierarchy.'})
             if not self.zone_id:
                 raise ValidationError({'zone': 'A monitor must be assigned to a zone.'})
             if not self.manager_id:
                 raise ValidationError({'manager': 'A monitor must report to a manager.'})
+        elif self.manager_id:
+            raise ValidationError({'manager': 'Manager assignment is used only for Monitor accounts.'})
 
     def role_code(self):
         return self.role.code if self.role else ''
