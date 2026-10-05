@@ -28,12 +28,14 @@ class Role(models.Model):
     MANAGER = 'MANAGER'
     CLERK = 'CLERK'
     SUPERVISOR = 'SUPERVISOR'
+    MONITOR = 'MONITOR'
     SALESMAN = 'SALESMAN'
     CODE_CHOICES = [
         (ADMIN, 'System Admin'),
         (MANAGER, 'Manager'),
         (CLERK, 'Sales Clerk'),
         (SUPERVISOR, 'Supervisor'),
+        (MONITOR, 'Monitor'),
         (SALESMAN, 'Salesman'),
     ]
 
@@ -151,6 +153,14 @@ class User(AbstractUser):
     supervisor = models.ForeignKey(
         'self', on_delete=models.SET_NULL, null=True, blank=True, related_name='subordinates'
     )
+    manager = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='monitors',
+        limit_choices_to={'role__code': Role.MANAGER},
+    )
     profile_picture = models.FileField(
         upload_to='profiles/%Y/%m/',
         blank=True,
@@ -166,6 +176,10 @@ class User(AbstractUser):
             not self.supervisor.role or self.supervisor.role.code != Role.SUPERVISOR
         ):
             raise ValidationError({'supervisor': 'The selected supervisor must have the Supervisor role.'})
+        if self.manager_id and (
+            not self.manager.role or self.manager.role.code != Role.MANAGER
+        ):
+            raise ValidationError({'manager': 'The selected manager must have the Manager role.'})
         if self.role and self.role.code == Role.SALESMAN:
             if not self.zone_id:
                 raise ValidationError({'zone': 'A salesman must be assigned to a zone.'})
@@ -175,6 +189,11 @@ class User(AbstractUser):
                 raise ValidationError(
                     {'supervisor': 'The salesman supervisor must match the supervisor assigned to the zone.'}
                 )
+        if self.role and self.role.code == Role.MONITOR:
+            if not self.zone_id:
+                raise ValidationError({'zone': 'A monitor must be assigned to a zone.'})
+            if not self.manager_id:
+                raise ValidationError({'manager': 'A monitor must report to a manager.'})
 
     def role_code(self):
         return self.role.code if self.role else ''
@@ -261,6 +280,9 @@ class Product(models.Model):
     def standard_price(self, sale_type):
         return self.retail_price if sale_type == Sale.GENERAL else self.wholesale_price
 
+    def price_for_mode(self, pricing_mode):
+        return self.retail_price if pricing_mode == Sale.RETAIL else self.wholesale_price
+
 
 class SaleSequence(models.Model):
     # Retained for backward compatibility with earlier MMS backups/migrations.
@@ -286,6 +308,10 @@ class Sale(models.Model):
     GENERAL = 'GENERAL'
     SALE_TYPES = [(CUSTOMER, 'Customer Sale'), (GENERAL, 'General / Walk-in Sale')]
 
+    WHOLESALE = 'WHOLESALE'
+    RETAIL = 'RETAIL'
+    PRICE_MODES = [(WHOLESALE, 'Wholesale'), (RETAIL, 'Retail')]
+
     SUBMITTED = 'SUBMITTED'
     LOCKED = 'LOCKED'
     VOIDED = 'VOIDED'
@@ -310,6 +336,7 @@ class Sale(models.Model):
         Customer, on_delete=models.PROTECT, null=True, blank=True, related_name='sales'
     )
     sale_type = models.CharField(max_length=12, choices=SALE_TYPES)
+    pricing_mode = models.CharField(max_length=12, choices=PRICE_MODES, default=WHOLESALE)
     transaction_time = models.DateTimeField(default=timezone.now, db_index=True)
     status = models.CharField(max_length=12, choices=STATUSES, default=SUBMITTED, db_index=True)
     total_amount = models.DecimalField(max_digits=16, decimal_places=2, default=0)
@@ -381,7 +408,7 @@ class SaleItem(models.Model):
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name='sale_items')
     quantity = models.DecimalField(
-        max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))]
+        max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal('1'))]
     )
     unit_price = models.DecimalField(
         max_digits=14, decimal_places=2, validators=[MinValueValidator(Decimal('0'))]
@@ -395,6 +422,9 @@ class SaleItem(models.Model):
     line_total = models.DecimalField(max_digits=16, decimal_places=2, default=0, editable=False)
 
     def clean(self):
+        if self.quantity is not None:
+            if self.quantity < 1 or self.quantity != self.quantity.to_integral_value():
+                raise ValidationError({'quantity': 'Quantity must be a positive whole number of cases.'})
         if (
             self.quantity is not None
             and self.unit_price is not None
@@ -406,6 +436,82 @@ class SaleItem(models.Model):
     def save(self, *args, **kwargs):
         self.line_total = max(Decimal('0'), self.quantity * self.unit_price - self.discount)
         super().save(*args, **kwargs)
+
+
+class MonitorReport(models.Model):
+    monitor = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name='monitor_reports'
+    )
+    salesman = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name='monitoring_reports'
+    )
+    zone = models.ForeignKey(Zone, on_delete=models.PROTECT, related_name='monitor_reports')
+    report_date = models.DateField(default=timezone.localdate, db_index=True)
+    summary = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-report_date', '-created_at']
+
+    def clean(self):
+        super().clean()
+        if self.monitor_id:
+            if not self.monitor.role or self.monitor.role.code != Role.MONITOR:
+                raise ValidationError({'monitor': 'The selected employee must have the Monitor role.'})
+            if not self.monitor.zone_id:
+                raise ValidationError({'monitor': 'The selected monitor must have an assigned zone.'})
+        if self.salesman_id and (
+            not self.salesman.role or self.salesman.role.code != Role.SALESMAN
+        ):
+            raise ValidationError({'salesman': 'The selected employee must have the Salesman role.'})
+        if self.monitor_id and self.salesman_id and self.monitor.zone_id != self.salesman.zone_id:
+            raise ValidationError({'salesman': 'The salesman must belong to the monitor\'s assigned zone.'})
+        if self.monitor_id and self.zone_id and self.monitor.zone_id != self.zone_id:
+            raise ValidationError({'zone': 'The report zone must match the monitor\'s assigned zone.'})
+        if self.salesman_id and self.zone_id and self.salesman.zone_id != self.zone_id:
+            raise ValidationError({'zone': 'The report zone must match the salesman\'s zone.'})
+
+    def __str__(self):
+        return f'{self.report_date} - {self.monitor.display_name} / {self.salesman.display_name}'
+
+
+class MonitorVisit(models.Model):
+    report = models.ForeignKey(MonitorReport, on_delete=models.CASCADE, related_name='visits')
+    customer = models.ForeignKey(
+        Customer, on_delete=models.PROTECT, null=True, blank=True, related_name='monitor_visits'
+    )
+    shop_name = models.CharField(
+        max_length=160,
+        blank=True,
+        help_text='Use this when the visited shop is not yet registered as a customer.',
+    )
+    has_company_chiller = models.BooleanField(default=False)
+    customer_comment = models.TextField(blank=True)
+    shopkeeper_comment = models.TextField(blank=True)
+    observations = models.TextField(blank=True)
+    follow_up_required = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def clean(self):
+        super().clean()
+        if not self.customer_id and not (self.shop_name or '').strip():
+            raise ValidationError({'shop_name': 'Select a customer or enter the shop name.'})
+        if (
+            self.customer_id
+            and self.report_id
+            and self.customer.assigned_salesman_id != self.report.salesman_id
+        ):
+            raise ValidationError(
+                {'customer': 'The selected customer must be assigned to the monitored salesman.'}
+            )
+
+    @property
+    def display_shop(self):
+        return self.customer.full_name if self.customer_id else self.shop_name
+
+    def __str__(self):
+        return self.display_shop
 
 
 class AuditLog(models.Model):
