@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views
+from . import monitoring_views, views
 
 urlpatterns = [
     path('', views.dashboard, name='dashboard'),
@@ -25,6 +25,12 @@ urlpatterns = [
     path('reports/', views.reports, name='reports'),
     path('reports/sales.csv', views.sales_csv, name='sales_csv'),
     path('reports/sales.xlsx', views.sales_excel, name='sales_excel'),
+
+    path('monitoring/', monitoring_views.monitoring_list, name='monitoring_list'),
+    path('monitoring/new/', monitoring_views.monitoring_create, name='monitoring_create'),
+    path('monitoring/export.csv', monitoring_views.monitoring_csv, name='monitoring_csv'),
+    path('monitoring/<int:pk>/', monitoring_views.monitoring_detail, name='monitoring_detail'),
+    path('monitoring/<int:pk>/edit/', monitoring_views.monitoring_edit, name='monitoring_edit'),
 
     path('team/', views.user_list, name='user_list'),
     path('team/new/', views.user_create, name='user_create'),
