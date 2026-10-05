@@ -1,0 +1,26 @@
+{% extends 'base.html' %}{% load mms_format %}{% block title %}Field Monitoring{% endblock %}{% block page_title %}Field Monitoring{% endblock %}{% block content %}
+<div class="d-flex flex-wrap justify-content-between gap-2 mb-3">
+  <form class="d-flex flex-wrap gap-2 flex-grow-1 live-filter-form" data-live-filter-form>
+    <input class="form-control" style="max-width:170px" type="date" name="start" value="{{ start|date:'Y-m-d' }}" data-live-change>
+    <input class="form-control" style="max-width:170px" type="date" name="end" value="{{ end|date:'Y-m-d' }}" data-live-change>
+    {% if show_monitor_filter %}<select class="form-select" style="max-width:220px" name="monitor" data-live-change><option value="">All monitors</option>{% for m in monitors %}<option value="{{ m.pk }}" {% if monitor_id == m.pk|stringformat:'s' %}selected{% endif %}>{{ m.display_name }}</option>{% endfor %}</select>{% endif %}
+    <select class="form-select" style="max-width:220px" name="salesman" data-live-change><option value="">All salesmen</option>{% for s in salesmen %}<option value="{{ s.pk }}" {% if salesman_id == s.pk|stringformat:'s' %}selected{% endif %}>{{ s.display_name }}</option>{% endfor %}</select>
+    <select class="form-select" style="max-width:190px" name="zone" data-live-change><option value="">All zones</option>{% for z in zones %}<option value="{{ z.pk }}" {% if zone_id == z.pk|stringformat:'s' %}selected{% endif %}>{{ z.code }} — {{ z.name }}</option>{% endfor %}</select>
+    <a class="btn btn-light" href="{% url 'monitoring_list' %}">Reset</a>
+  </form>
+  <div class="d-flex gap-2"><a class="btn btn-outline-primary" href="{% url 'monitoring_csv' %}?start={{ start|date:'Y-m-d' }}&end={{ end|date:'Y-m-d' }}">Export CSV</a><a class="btn btn-primary" href="{% url 'monitoring_create' %}">+ New report</a></div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-xl"><div class="metric-card"><span>Reports</span><strong>{{ totals.reports|default:0|number }}</strong><small>Monitoring days</small></div></div>
+  <div class="col-6 col-xl"><div class="metric-card"><span>Shops visited</span><strong>{{ totals.shops|default:0|number }}</strong><small>Visit records</small></div></div>
+  <div class="col-6 col-xl"><div class="metric-card"><span>Salesmen monitored</span><strong>{{ totals.salesmen|default:0|number }}</strong><small>Distinct salesmen</small></div></div>
+  <div class="col-6 col-xl"><div class="metric-card"><span>Chillers found</span><strong>{{ totals.chillers|default:0|number }}</strong><small>Company chillers</small></div></div>
+  <div class="col-6 col-xl"><div class="metric-card"><span>Follow-ups</span><strong>{{ totals.follow_ups|default:0|number }}</strong><small>Require attention</small></div></div>
+</div>
+
+<div class="card panel"><div class="table-responsive"><table class="table align-middle mb-0 stack-table"><thead><tr><th>Date</th><th>Monitor</th><th>Zone</th><th>Salesman monitored</th><th class="text-end">Shops</th><th class="text-end">Chillers</th><th class="text-end">Follow-ups</th></tr></thead><tbody>
+{% for r in reports %}<tr class="record-row" data-href="{% url 'monitoring_detail' r.pk %}" tabindex="0"><td>{{ r.report_date|date:'d M Y' }}</td><td>{{ r.monitor.display_name }}</td><td>{{ r.zone.code }}</td><td>{{ r.salesman.display_name }}</td><td class="text-end">{{ r.shop_count }}</td><td class="text-end">{{ r.chiller_count }}</td><td class="text-end">{{ r.follow_up_count }}</td></tr>{% empty %}<tr><td colspan="7" class="text-center py-5 text-secondary">No monitoring reports found for this period.</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% include 'core/_pagination.html' %}
+{% endblock %}
