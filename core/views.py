@@ -855,6 +855,8 @@ def product_price_api(request, pk):
 
 @login_required
 def reports(request):
+    if not can_use_sales(request.user):
+        raise PermissionDenied('Monitor accounts use Field Monitoring reports instead of sales reports.')
     qs, start, end, salesman_id, zone_id, sale_type = _report_qs(request)
     data = _report_data(qs)
 
