@@ -1310,7 +1310,7 @@ def _visible_zones(user):
 
 @login_required
 def zone_list(request):
-    if not (can_manage_market(request.user) or is_supervisor(request.user)):
+    if not (can_manage_market(request.user) or is_supervisor(request.user) or is_monitor(request.user)):
         raise PermissionDenied
     q = request.GET.get('q', '').strip()
     qs = _visible_zones(request.user)
@@ -1334,7 +1334,7 @@ def zone_list(request):
 
 @login_required
 def zone_detail(request, pk):
-    if not (can_manage_market(request.user) or is_supervisor(request.user)):
+    if not (can_manage_market(request.user) or is_supervisor(request.user) or is_monitor(request.user)):
         raise PermissionDenied
     obj = get_object_or_404(_visible_zones(request.user), pk=pk)
     sales = Sale.objects.filter(salesman__zone=obj).exclude(status=Sale.VOIDED)
