@@ -14,12 +14,20 @@ def is_admin(user):
     return user.is_superuser or code(user) == Role.ADMIN
 
 
+def is_manager(user):
+    return code(user) == Role.MANAGER
+
+
 def is_management(user):
     return is_admin(user) or code(user) in {Role.MANAGER, Role.CLERK}
 
 
 def is_supervisor(user):
     return code(user) == Role.SUPERVISOR
+
+
+def is_monitor(user):
+    return code(user) == Role.MONITOR
 
 
 def is_salesman(user):
@@ -31,6 +39,8 @@ def direct_report_ids(user):
 
 
 def visible_sales(qs, user):
+    if is_monitor(user):
+        return qs.none()
     if is_management(user) or (user.role and user.role.can_view_all_sales):
         return qs
     if is_supervisor(user):
@@ -43,7 +53,19 @@ def visible_customers(qs, user):
         return qs
     if is_supervisor(user):
         return qs.filter(assigned_salesman__supervisor=user)
+    if is_monitor(user):
+        return qs.filter(zone_id=user.zone_id) if user.zone_id else qs.none()
     return qs.filter(assigned_salesman=user)
+
+
+def visible_monitor_reports(qs, user):
+    if is_admin(user):
+        return qs
+    if is_manager(user):
+        return qs.filter(monitor__manager=user)
+    if is_monitor(user):
+        return qs.filter(monitor=user)
+    return qs.none()
 
 
 def can_manage_users(user):
@@ -52,6 +74,14 @@ def can_manage_users(user):
 
 def can_manage_market(user):
     return is_management(user) or bool(user.role and user.role.can_manage_market_data)
+
+
+def can_manage_customers(user):
+    return is_management(user) or is_supervisor(user) or is_monitor(user)
+
+
+def can_use_sales(user):
+    return not is_monitor(user)
 
 
 def can_export(user):
@@ -64,8 +94,16 @@ def can_backup(user):
 
 
 def can_override_price(user):
-    """All operational roles except salesmen may override a transaction's unit price."""
+    """Operational leadership may override a transaction price; salesmen cannot."""
     return is_admin(user) or is_management(user) or is_supervisor(user)
+
+
+def can_view_monitoring(user):
+    return is_admin(user) or is_manager(user) or is_monitor(user)
+
+
+def can_edit_monitor_report(user, report):
+    return is_admin(user) or is_manager(user) or (is_monitor(user) and report.monitor_id == user.id)
 
 
 def can_view_audit(user):

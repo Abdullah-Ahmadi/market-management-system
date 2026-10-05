@@ -4,12 +4,15 @@ from .models import SystemSetting
 from .permissions import (
     can_backup,
     can_export,
+    can_manage_customers,
     can_manage_market,
     can_manage_users,
+    can_use_sales,
+    can_view_monitoring,
     is_management,
+    is_monitor,
     is_supervisor,
 )
-
 
 
 def _standard_back_url(request):
@@ -35,6 +38,10 @@ def _standard_back_url(request):
         'sale_edit': ('sale_detail', {'pk': pk}),
         'sale_void': ('sale_detail', {'pk': pk}),
         'reports': ('dashboard', {}),
+        'monitoring_list': ('dashboard', {}),
+        'monitoring_create': ('monitoring_list', {}),
+        'monitoring_detail': ('monitoring_list', {}),
+        'monitoring_edit': ('monitoring_detail', {'pk': pk}),
         'user_list': ('dashboard', {}),
         'user_create': ('user_list', {}),
         'user_detail': ('user_list', {}),
@@ -75,8 +82,14 @@ def mms_context(request):
         'mms_settings': settings,
         'ui_can_backup': authenticated and can_backup(user),
         'ui_can_export': authenticated and can_export(user),
+        'ui_can_manage_customers': authenticated and can_manage_customers(user),
         'ui_can_manage_market': authenticated and can_manage_market(user),
         'ui_can_manage_users': authenticated and can_manage_users(user),
-        'ui_can_view_zones': authenticated and (is_management(user) or is_supervisor(user)),
+        'ui_can_record_sales': authenticated and can_use_sales(user),
+        'ui_can_view_monitoring': authenticated and can_view_monitoring(user),
+        'ui_is_monitor': authenticated and is_monitor(user),
+        'ui_can_view_zones': authenticated and (
+            is_management(user) or is_supervisor(user) or is_monitor(user)
+        ),
         'mms_back_url': _standard_back_url(request) if authenticated else None,
     }

@@ -19,6 +19,7 @@ class Command(BaseCommand):
             Role.MANAGER: dict(name='Manager', level=80, can_manage_users=False, can_manage_market_data=True, can_view_all_sales=True, can_export=True, can_backup=False, can_edit_locked_sales=True),
             Role.CLERK: dict(name='Sales Clerk', level=70, can_manage_users=False, can_manage_market_data=True, can_view_all_sales=True, can_export=True, can_backup=False, can_edit_locked_sales=False),
             Role.SUPERVISOR: dict(name='Supervisor', level=50, can_manage_users=False, can_manage_market_data=False, can_view_all_sales=False, can_export=True, can_backup=False, can_edit_locked_sales=False),
+            Role.MONITOR: dict(name='Monitor', level=40, can_manage_users=False, can_manage_market_data=False, can_view_all_sales=False, can_export=False, can_backup=False, can_edit_locked_sales=False),
             Role.SALESMAN: dict(name='Salesman', level=20, can_manage_users=False, can_manage_market_data=False, can_view_all_sales=False, can_export=False, can_backup=False, can_edit_locked_sales=False),
         }
         roles = {}
@@ -51,8 +52,10 @@ class Command(BaseCommand):
         sales2, _ = User.objects.get_or_create(username='sales2', defaults={'first_name': 'Farid', 'last_name': 'Karimi', 'employee_code': 'EMP-0102', 'role': roles[Role.SALESMAN], 'position': 'Salesman', 'zone': a, 'supervisor': sup})
         sales2.role = roles[Role.SALESMAN]; sales2.zone = a; sales2.supervisor = sup; sales2.set_password('MmsDemo!2026'); sales2.save()
 
-        manager, _ = User.objects.get_or_create(username='manager', defaults={'first_name': 'Market', 'last_name': 'Manager', 'employee_code': 'EMP-0010', 'role': roles[Role.MANAGER], 'position': 'Sales Manager'})
+        manager, _ = User.objects.get_or_create(username='manager', defaults={'first_name': 'Farid', 'last_name': 'Ahmadi', 'employee_code': 'EMP-0010', 'role': roles[Role.MANAGER], 'position': 'Sales Manager'})
         manager.role = roles[Role.MANAGER]; manager.set_password('MmsDemo!2026'); manager.save()
+        monitor, _ = User.objects.get_or_create(username='monitor1', defaults={'first_name': 'Hamid', 'last_name': 'Rahimi', 'employee_code': 'EMP-0300', 'role': roles[Role.MONITOR], 'position': 'Market Monitor', 'zone': a, 'manager': manager})
+        monitor.role = roles[Role.MONITOR]; monitor.zone = a; monitor.manager = manager; monitor.set_password('MmsDemo!2026'); monitor.save()
         clerk, _ = User.objects.get_or_create(username='clerk', defaults={'first_name': 'Sales', 'last_name': 'Clerk', 'employee_code': 'EMP-0011', 'role': roles[Role.CLERK], 'position': 'Sales Clerk'})
         clerk.role = roles[Role.CLERK]; clerk.set_password('MmsDemo!2026'); clerk.save()
 
@@ -68,5 +71,5 @@ class Command(BaseCommand):
         if not Customer.objects.filter(full_name='Demo Grocery').exists():
             Customer.objects.create(full_name='Demo Grocery', phone_number='0700000000', address='Central Market', zone=a, assigned_salesman=sales1, created_by=sales1)
 
-        self.stdout.write(self.style.WARNING('Demo password for admin/manager/clerk/supervisor/supervisor2/sales1/sales2: MmsDemo!2026'))
+        self.stdout.write(self.style.WARNING('Demo password for admin/manager/clerk/supervisor/supervisor2/monitor1/sales1/sales2: MmsDemo!2026'))
         self.stdout.write(self.style.WARNING('Change every demo password before real use.'))

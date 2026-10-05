@@ -42,22 +42,24 @@ This edition is prepared for the same deployment path used for OMS: **Public Git
 ### Customers / shopkeepers
 - Automatic concurrency-safe customer IDs such as `CUST-A00001`.
 - Customer creation, editing, search and detail pages.
-- Live customer type-ahead in Record Sale; salespeople do not need to scroll through hundreds of customers.
-- Customer search is scoped to the records the logged-in user is allowed to use.
+- Live customer type-ahead in Record Sale plus a **Browse all customers** option for the user's permitted scope.
+- Customer search and browsing are scoped to the records the logged-in user is allowed to use.
+- Salesmen select existing assigned customers but cannot create or edit customer records; supervisors, monitors and authorized management users handle customer creation/maintenance.
 
 ### Products and pricing
 - Automatic product codes such as `PROD-00001`.
 - Product name, size, unit, wholesale price and retail price.
 - Retail price cannot be lower than wholesale price.
 - Product detail page with sales history and performance data.
-- For a normal registered-customer sale, the standard price is the product's **wholesale price**.
-- For a General / Walk-in sale, the standard price is the product's **retail price**.
-- Salesmen cannot override unit price. This is enforced on the server even if a browser request is tampered with.
+- Every sale has an explicit **Wholesale / Retail** pricing mode. Salesmen may choose either mode for the transaction.
+- MMS loads the matching wholesale or retail master price for every selected product.
+- Salesmen cannot type an arbitrary unit price. Their chosen pricing mode is enforced again on the server even if a browser request is tampered with.
 - System Admin, Manager, Sales Clerk and Supervisor can override the unit price on a transaction when operationally required.
 
 ### Sales
 - Registered-customer and General / Walk-in sales.
-- Multiple products per sale, quantities, discounts and server-calculated totals.
+- Multiple products per sale, positive whole-case quantities, discounts and server-calculated totals.
+- Fractional quantities such as 0.5 or 2.25 cases are rejected in both the form and server-side model validation.
 - Per-zone/per-day sale numbers such as `SALE-26091001-00001`, `SALE-26091001-00002`; the embedded `26091001` is the zone's shared daily dispatch number.
 - The individual five-digit sequence restarts independently for each zone on each day.
 - Salesman access limited to own operational data.
@@ -66,6 +68,14 @@ This edition is prepared for the same deployment path used for OMS: **Public Git
 - Salesman edit cutoff (default 7:00 PM) and Supervisor extra correction period (default 24 hours), both managed through settings.
 - Submitted, locked, corrected and voided states; financial records are preserved rather than silently deleted.
 - Corrections and important actions produce audit records.
+
+### Field monitoring
+- Separate **Monitor** role, independent from the salesman/supervisor hierarchy and reporting to a Manager.
+- Every monitor has an assigned zone and can work with salesmen/customers in that territory.
+- Monitors do not receive sales-record access; their operational workspace is Field Monitoring.
+- Daily monitoring reports record the salesman observed, shops visited, customer/shopkeeper comments, company-chiller presence, observations/insights and follow-up requirements.
+- Monitors see their own monitoring history/KPIs; their assigned Manager sees the reports of monitors who report to them; System Admin can see all monitoring data.
+- Monitoring data can be filtered by date, monitor, salesman and zone and exported to CSV.
 
 ### Reporting and analysis
 - Date, salesman, zone and sale-type filtering with live updates.

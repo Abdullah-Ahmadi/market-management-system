@@ -1,7 +1,19 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
-from .models import AuditLog, Customer, Product, Role, Sale, SaleItem, SystemSetting, User, Zone
+from .models import (
+    AuditLog,
+    Customer,
+    MonitorReport,
+    MonitorVisit,
+    Product,
+    Role,
+    Sale,
+    SaleItem,
+    SystemSetting,
+    User,
+    Zone,
+)
 
 admin.site.site_header = 'MMS System Administration'
 admin.site.site_title = 'MMS Admin'
@@ -11,12 +23,12 @@ admin.site.index_title = 'System Administration'
 @admin.register(User)
 class MMSUserAdmin(UserAdmin):
     fieldsets = UserAdmin.fieldsets + (
-        ('MMS Profile', {'fields': ('employee_code', 'role', 'position', 'phone_number', 'zone', 'supervisor', 'profile_picture')}),
+        ('MMS Profile', {'fields': ('employee_code', 'role', 'position', 'phone_number', 'zone', 'supervisor', 'manager', 'profile_picture')}),
     )
     add_fieldsets = UserAdmin.add_fieldsets + (
-        ('MMS Profile', {'fields': ('employee_code', 'role', 'position', 'phone_number', 'zone', 'supervisor')}),
+        ('MMS Profile', {'fields': ('employee_code', 'role', 'position', 'phone_number', 'zone', 'supervisor', 'manager')}),
     )
-    list_display = ('username', 'first_name', 'last_name', 'employee_code', 'role', 'zone', 'supervisor', 'is_active')
+    list_display = ('username', 'first_name', 'last_name', 'employee_code', 'role', 'zone', 'supervisor', 'manager', 'is_active')
     list_filter = ('role', 'zone', 'is_active')
     search_fields = ('username', 'first_name', 'last_name', 'employee_code', 'phone_number')
 
@@ -59,11 +71,28 @@ class SaleAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return False
 
-    list_display = ('sale_number', 'transaction_time', 'salesman', 'customer', 'sale_type', 'status', 'total_amount')
-    list_filter = ('status', 'sale_type', 'salesman')
+    list_display = ('sale_number', 'transaction_time', 'salesman', 'customer', 'sale_type', 'pricing_mode', 'status', 'total_amount')
+    list_filter = ('status', 'sale_type', 'pricing_mode', 'salesman')
     search_fields = ('sale_number', 'customer__customer_code', 'customer__full_name')
     inlines = [SaleItemInline]
     readonly_fields = ('sale_number', 'total_amount', 'created_at', 'updated_at', 'locked_at')
+
+
+class MonitorVisitInline(admin.StackedInline):
+    model = MonitorVisit
+    extra = 0
+
+
+@admin.register(MonitorReport)
+class MonitorReportAdmin(admin.ModelAdmin):
+    list_display = ('report_date', 'monitor', 'salesman', 'zone', 'visit_count')
+    list_filter = ('report_date', 'zone', 'monitor', 'salesman')
+    search_fields = ('monitor__first_name', 'monitor__last_name', 'salesman__first_name', 'salesman__last_name', 'summary')
+    inlines = [MonitorVisitInline]
+
+    @admin.display(description='Shops')
+    def visit_count(self, obj):
+        return obj.visits.count()
 
 
 @admin.register(AuditLog)

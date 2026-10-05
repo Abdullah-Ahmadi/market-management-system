@@ -150,6 +150,8 @@
   const addItem = $('#addItem');
   const grandTotal = $('#grandTotal');
   const saleType = $('#id_sale_type');
+  const pricingMode = $('#id_pricing_mode');
+  const pricingSummary = $('#pricingSummary');
   const salesman = $('#id_salesman');
   const priceOverride = saleForm.dataset.priceOverride === '1';
   const formatNumber = value => new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(Number.isFinite(value) ? value : 0);
@@ -180,9 +182,9 @@
     if (!priceInput) return;
     if (!force && priceInput.value) return;
     if (priceOverride && priceInput.dataset.userEdited === 'true' && force) return;
-    const type = saleType?.value || 'CUSTOMER';
+    const mode = pricingMode?.value || 'WHOLESALE';
     try {
-      const url = window.MMS_PRODUCT_PRICE_URL.replace('__ID__', select.value) + `?sale_type=${encodeURIComponent(type)}`;
+      const url = window.MMS_PRODUCT_PRICE_URL.replace('__ID__', select.value) + `?pricing_mode=${encodeURIComponent(mode)}`;
       const response = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
       if (!response.ok) return;
       const data = await response.json();
@@ -231,6 +233,7 @@
   const customerName = $('#selectedCustomerName');
   const customerMeta = $('#selectedCustomerMeta');
   const clearCustomer = $('#clearCustomer');
+  const browseCustomers = $('#browseCustomers');
   let searchTimer;
   let searchController;
   let selectedLabel = customerInput?.value || '';
@@ -280,16 +283,18 @@
     customerResults.classList.add('show');
   }
 
-  async function searchCustomers() {
+  async function searchCustomers(browseAll = false) {
     if (!customerInput || !window.MMS_CUSTOMER_SEARCH_URL) return;
     const query = customerInput.value.trim();
-    if (query === selectedLabel) return;
-    if (customerHidden) customerHidden.value = '';
-    if (customerCard) customerCard.classList.add('d-none');
-    if (query.length < 1) { if (customerResults) customerResults.classList.remove('show'); return; }
+    if (!browseAll && query === selectedLabel) return;
+    if (!browseAll) {
+      if (customerHidden) customerHidden.value = '';
+      if (customerCard) customerCard.classList.add('d-none');
+      if (query.length < 1) { if (customerResults) customerResults.classList.remove('show'); return; }
+    }
     if (searchController) searchController.abort();
     searchController = new AbortController();
-    const params = new URLSearchParams({ q: query });
+    const params = browseAll ? new URLSearchParams({ all: '1' }) : new URLSearchParams({ q: query });
     if (salesman?.value) params.set('salesman', salesman.value);
     try {
       const response = await fetch(`${window.MMS_CUSTOMER_SEARCH_URL}?${params.toString()}`, { signal: searchController.signal, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
@@ -301,7 +306,8 @@
     }
   }
 
-  if (customerInput) customerInput.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(searchCustomers, 220); });
+  if (customerInput) customerInput.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => searchCustomers(false), 220); });
+  if (browseCustomers) browseCustomers.addEventListener('click', () => searchCustomers(true));
   if (clearCustomer) clearCustomer.addEventListener('click', () => { clearCustomerSelection(); customerInput?.focus(); });
   if (salesman) salesman.addEventListener('change', () => clearCustomerSelection());
   document.addEventListener('click', e => { if (customerResults && !e.target.closest('.customer-search-wrap')) customerResults.classList.remove('show'); });
@@ -315,5 +321,16 @@
       if (product?.value) loadProductPrice(product, true);
     });
   }
+  function syncPricingMode() {
+    if (pricingSummary && pricingMode) {
+      pricingSummary.textContent = pricingMode.options[pricingMode.selectedIndex]?.text || 'Wholesale';
+    }
+    $('.sale-item-row', rows).forEach(row => {
+      const product = $('[name$="-product"]', row);
+      if (product?.value) loadProductPrice(product, true);
+    });
+  }
+  if (pricingMode) pricingMode.addEventListener('change', syncPricingMode);
   if (saleType) { saleType.addEventListener('change', syncSaleType); syncSaleType(); }
+  syncPricingMode();
 })();

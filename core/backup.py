@@ -26,6 +26,8 @@ from django.utils import timezone
 from .models import (
     AuditLog,
     Customer,
+    MonitorReport,
+    MonitorVisit,
     Product,
     ProductSequence,
     Role,
@@ -50,6 +52,8 @@ BACKUP_MODELS = [
     ('zones', Zone),
     ('users', User),
     ('customers', Customer),
+    ('monitor_reports', MonitorReport),
+    ('monitor_visits', MonitorVisit),
     ('product_sequences', ProductSequence),
     ('products', Product),
     ('sale_sequences', SaleSequence),
@@ -156,7 +160,7 @@ def inspect_backup(uploaded_file):
         raise ValueError('Backup data is damaged.') from exc
     if payload.get('schema_version') != FORMAT_VERSION or not isinstance(payload.get('tables'), dict):
         raise ValueError('Backup data structure is not supported.')
-    optional_keys = {'zone_sequences', 'zone_sale_sequences'}
+    optional_keys = {'zone_sequences', 'zone_sale_sequences', 'monitor_reports', 'monitor_visits'}
     for key, _ in BACKUP_MODELS:
         if key in optional_keys:
             continue
@@ -239,6 +243,8 @@ def _replace_database(payload):
 
     # Delete in dependency-safe order. Zone.supervisor creates a deliberate Zone/User cycle.
     AuditLog.objects.all().delete()
+    MonitorVisit.objects.all().delete()
+    MonitorReport.objects.all().delete()
     SaleItem.objects.all().delete()
     Sale.objects.all().delete()
     ZoneSaleSequence.objects.all().delete()
@@ -255,6 +261,19 @@ def _replace_database(payload):
 
     _bulk_restore(Role, tables['roles'])
     _bulk_restore(ZoneSequence, tables.get('zone_sequences', []))
+    Role.objects.get_or_create(
+        code=Role.MONITOR,
+        defaults={
+            'name': 'Monitor',
+            'level': 40,
+            'can_manage_users': False,
+            'can_manage_market_data': False,
+            'can_view_all_sales': False,
+            'can_export': False,
+            'can_backup': False,
+            'can_edit_locked_sales': False,
+        },
+    )
     Role.objects.filter(code=Role.ADMIN).update(
         level=100,
         can_manage_users=True,
@@ -275,17 +294,23 @@ def _replace_database(payload):
     _bulk_restore(Zone, zone_rows)
 
     user_supervisors = {}
+    user_managers = {}
     user_rows = []
     for row in tables['users']:
         copy = dict(row)
         user_supervisors[copy.get('id')] = copy.get('supervisor_id')
+        user_managers[copy.get('id')] = copy.get('manager_id')
         copy['supervisor_id'] = None
+        copy['manager_id'] = None
         user_rows.append(copy)
     _bulk_restore(User, user_rows)
 
     for user_id, supervisor_id in user_supervisors.items():
         if supervisor_id:
             User.objects.filter(pk=user_id).update(supervisor_id=supervisor_id)
+    for user_id, manager_id in user_managers.items():
+        if manager_id:
+            User.objects.filter(pk=user_id).update(manager_id=manager_id)
     for zone_id, supervisor_id in zone_supervisors.items():
         if supervisor_id:
             Zone.objects.filter(pk=zone_id).update(supervisor_id=supervisor_id)
@@ -295,6 +320,8 @@ def _replace_database(payload):
     _bulk_restore(SaleSequence, tables['sale_sequences'])
     _bulk_restore(ZoneSaleSequence, tables.get('zone_sale_sequences', []))
     _bulk_restore(Customer, tables['customers'])
+    _bulk_restore(MonitorReport, tables.get('monitor_reports', []))
+    _bulk_restore(MonitorVisit, tables.get('monitor_visits', []))
     _bulk_restore(Sale, tables['sales'])
     _bulk_restore(SaleItem, tables['sale_items'])
     _repair_zone_serial_state()

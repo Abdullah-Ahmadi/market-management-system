@@ -6,6 +6,7 @@
       {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
       <div class="row g-3">
         <div class="col-md-6"><label class="form-label" for="{{ form.sale_type.id_for_label }}">Sale type</label>{{ form.sale_type }}{% for e in form.sale_type.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div>
+        <div class="col-md-6"><label class="form-label" for="{{ form.pricing_mode.id_for_label }}">Pricing</label>{{ form.pricing_mode }}{% for e in form.pricing_mode.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}<div class="form-text">Choose whether this transaction uses retail or wholesale prices.</div></div>
         {% if form.salesman.is_hidden %}{{ form.salesman }}<div class="col-md-6"><label class="form-label">Salesman</label><div class="read-only-field">{{ user.display_name }}</div></div>{% else %}<div class="col-md-6"><label class="form-label" for="{{ form.salesman.id_for_label }}">Salesman</label>{{ form.salesman }}{% for e in form.salesman.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div>{% endif %}
         <div class="col-12" id="customerPickerBlock">
           <label class="form-label" for="customerSearch">Customer</label>{{ form.customer }}
@@ -14,17 +15,21 @@
             <button type="button" class="search-clear" id="clearCustomer" aria-label="Clear customer">×</button>
             <div class="customer-search-results" id="customerSearchResults" role="listbox" aria-label="Customer search results"></div>
           </div>
+          <div class="d-flex flex-wrap gap-2 mt-2">
+            <button type="button" class="btn btn-sm btn-outline-primary" id="browseCustomers">Browse all customers</button>
+            <small class="text-secondary align-self-center">Or start typing to search.</small>
+          </div>
           <div class="selected-customer-card {% if not selected_customer %}d-none{% endif %}" id="selectedCustomerCard">
             <div><strong id="selectedCustomerName">{% if selected_customer %}{{ selected_customer.full_name }}{% endif %}</strong><small id="selectedCustomerMeta">{% if selected_customer %}{{ selected_customer.customer_code }} · Zone {{ selected_customer.zone.code }}{% endif %}</small></div><span class="selected-check">✓</span>
           </div>
           {% for e in form.customer.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
-          <div class="form-text">Start typing and results appear automatically. No long customer dropdown is required.</div>
+          <div class="form-text">Search by ID, name, phone or address, or browse the full customer list available in your scope.</div>
         </div>
         <div class="col-12"><label class="form-label" for="{{ form.notes.id_for_label }}">Notes</label>{{ form.notes }}{% for e in form.notes.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div>
       </div>
     </div></div>
 
-    <div class="card panel"><div class="card-header panel-header d-flex justify-content-between align-items-center"><div><h3 class="h5 mb-0">Products</h3><small>{% if can_override_price %}Standard price is loaded automatically; your role may override it when necessary.{% else %}Price is loaded from the product master and cannot be changed by a salesman.{% endif %}</small></div><button type="button" class="btn btn-sm btn-outline-primary" id="addItem">+ Add item</button></div>
+    <div class="card panel"><div class="card-header panel-header d-flex justify-content-between align-items-center"><div><h3 class="h5 mb-0">Products</h3><small>{% if can_override_price %}The selected retail/wholesale price is loaded automatically; your role may override it when necessary.{% else %}Choose Retail or Wholesale above. Product prices are then loaded automatically and cannot be manually altered.{% endif %}</small></div><button type="button" class="btn btn-sm btn-outline-primary" id="addItem">+ Add item</button></div>
       <div class="card-body p-4">{{ formset.management_form }}{% if formset.non_form_errors %}<div class="alert alert-danger">{{ formset.non_form_errors }}</div>{% endif %}
         <div id="itemRows">{% for f in formset %}
           <div class="sale-item-row">{{ f.id }}<div class="row g-2 align-items-end">
@@ -44,7 +49,7 @@
     </div>
   </div>
 
-  <div class="col-xl-4"><div class="card panel sticky-xl-top sale-summary" style="top:88px"><div class="card-body p-4"><span class="text-secondary">Transaction total</span><div class="display-6 fw-bold mt-1"><small class="fs-5">{{ mms_settings.currency }}</small> <span id="grandTotal">0</span></div><hr><div class="summary-rule"><span>Pricing</span><strong>{% if can_override_price %}Editable by role{% else %}Master price locked{% endif %}</strong></div><div class="summary-rule"><span>Sale cutoff</span><strong>{{ mms_settings.salesman_edit_cutoff|time:'H:i' }}</strong></div><p class="small text-secondary mt-3">The browser shows a preview. Django validates the customer, quantities, permissions and final amount before saving.</p><button class="btn btn-primary btn-lg w-100">{% if editing %}Save correction{% else %}Submit sale{% endif %}</button><a href="{% url 'sale_list' %}" class="btn btn-light w-100 mt-2">Cancel</a></div></div></div>
+  <div class="col-xl-4"><div class="card panel sticky-xl-top sale-summary" style="top:88px"><div class="card-body p-4"><span class="text-secondary">Transaction total</span><div class="display-6 fw-bold mt-1"><small class="fs-5">{{ mms_settings.currency }}</small> <span id="grandTotal">0</span></div><hr><div class="summary-rule"><span>Pricing</span><strong id="pricingSummary">{{ form.instance.get_pricing_mode_display|default:'Wholesale' }}</strong></div><div class="summary-rule"><span>Sale cutoff</span><strong>{{ mms_settings.salesman_edit_cutoff|time:'H:i' }}</strong></div><p class="small text-secondary mt-3">The browser shows a preview. Django validates the customer, quantities, permissions and final amount before saving.</p><button class="btn btn-primary btn-lg w-100">{% if editing %}Save correction{% else %}Submit sale{% endif %}</button><a href="{% url 'sale_list' %}" class="btn btn-light w-100 mt-2">Cancel</a></div></div></div>
 </div></form>
 {% endblock %}
 {% block scripts %}<script>window.MMS_PRODUCT_PRICE_URL="{% url 'product_price_api' 999999 %}".replace('999999','__ID__');window.MMS_CUSTOMER_SEARCH_URL="{% url 'customer_search_api' %}";</script>{% endblock %}

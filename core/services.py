@@ -33,6 +33,7 @@ def sale_snapshot(sale):
         'status': sale.status,
         'customer_id': sale.customer_id,
         'sale_type': sale.sale_type,
+        'pricing_mode': sale.pricing_mode,
         'total_amount': str(sale.total_amount),
         'notes': sale.notes,
         'items': [
@@ -65,15 +66,10 @@ def save_sale(*, sale, sale_form, item_formset, user):
     settings = SystemSetting.get_solo()
     for item in items:
         item.sale = sale
-        # Defense in depth: never trust a browser-posted unit price from a salesman.
+        # Defense in depth: salesmen may choose Retail or Wholesale, but cannot
+        # submit an arbitrary unit price. Reprice every line from the selected mode.
         if not can_override_price(user):
-            old = None
-            if item.pk:
-                old = SaleItem.objects.filter(pk=item.pk).values('product_id', 'unit_price').first()
-            if old and old['product_id'] == item.product_id:
-                item.unit_price = old['unit_price']
-            else:
-                item.unit_price = item.product.standard_price(sale.sale_type)
+            item.unit_price = item.product.price_for_mode(sale.pricing_mode)
             if not settings.allow_salesman_discounts:
                 item.discount = Decimal('0')
         item.full_clean()
