@@ -2,8 +2,27 @@ from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.forms import inlineformset_factory
 
-from .models import Customer, Product, Role, Sale, SaleItem, SystemSetting, User, Zone
-from .permissions import can_override_price, is_management, is_supervisor
+from .models import (
+    Customer,
+    MonitorReport,
+    MonitorVisit,
+    Product,
+    Role,
+    Sale,
+    SaleItem,
+    SystemSetting,
+    User,
+    Zone,
+)
+from .permissions import (
+    can_override_price,
+    is_admin,
+    is_management,
+    is_manager,
+    is_monitor,
+    is_supervisor,
+    visible_customers,
+)
 
 
 class BootstrapMixin:
@@ -111,8 +130,18 @@ class CustomerForm(BootstrapMixin, forms.ModelForm):
         self.user = user
         if user and not is_management(user):
             if is_supervisor(user):
-                self.fields['assigned_salesman'].queryset = user.subordinates.filter(is_active=True)
+                self.fields['assigned_salesman'].queryset = user.subordinates.filter(
+                    role__code=Role.SALESMAN, is_active=True
+                )
                 self.fields['zone'].queryset = Zone.objects.filter(supervisor=user, is_active=True)
+            elif is_monitor(user):
+                self.fields['assigned_salesman'].queryset = User.objects.filter(
+                    role__code=Role.SALESMAN, zone_id=user.zone_id, is_active=True
+                )
+                self.fields['zone'].queryset = (
+                    Zone.objects.filter(pk=user.zone_id, is_active=True)
+                    if user.zone_id else Zone.objects.none()
+                )
             else:
                 self.fields['assigned_salesman'].queryset = User.objects.filter(pk=user.pk)
                 self.fields['zone'].queryset = (
@@ -134,6 +163,13 @@ class CustomerForm(BootstrapMixin, forms.ModelForm):
         if user and not is_management(user):
             if is_supervisor(user) and salesman and salesman.supervisor_id != user.id:
                 self.add_error('assigned_salesman', 'Select one of your direct salesmen.')
+            elif is_monitor(user):
+                if zone and zone.id != user.zone_id:
+                    self.add_error('zone', 'A monitor can manage customers only in the assigned zone.')
+                if salesman and salesman.zone_id != user.zone_id:
+                    self.add_error('assigned_salesman', 'Select a salesman from your assigned zone.')
+                if user.zone_id:
+                    cleaned['zone'] = user.zone
             elif not is_supervisor(user):
                 cleaned['assigned_salesman'] = user
                 if user.zone_id:
@@ -168,6 +204,7 @@ class UserCreateForm(BootstrapMixin, UserCreationForm):
             'phone_number',
             'zone',
             'supervisor',
+            'manager',
             'profile_picture',
         ]
 
@@ -179,6 +216,11 @@ class UserCreateForm(BootstrapMixin, UserCreationForm):
         self.fields['supervisor'].queryset = User.objects.filter(
             role__code=Role.SUPERVISOR, is_active=True
         )
+        self.fields['manager'].queryset = User.objects.filter(
+            role__code=Role.MANAGER, is_active=True
+        )
+        self.fields['supervisor'].help_text = 'Required for salesmen.'
+        self.fields['manager'].help_text = 'Required for monitors.'
         self.fields['password1'].widget.attrs.update(
             {'data-password-primary': 'true', 'autocomplete': 'new-password'}
         )
@@ -201,6 +243,7 @@ class UserEditForm(BootstrapMixin, forms.ModelForm):
             'phone_number',
             'zone',
             'supervisor',
+            'manager',
             'profile_picture',
             'is_active',
         ]
@@ -213,6 +256,11 @@ class UserEditForm(BootstrapMixin, forms.ModelForm):
         self.fields['supervisor'].queryset = User.objects.filter(
             role__code=Role.SUPERVISOR, is_active=True
         ).exclude(pk=self.instance.pk)
+        self.fields['manager'].queryset = User.objects.filter(
+            role__code=Role.MANAGER, is_active=True
+        ).exclude(pk=self.instance.pk)
+        self.fields['supervisor'].help_text = 'Required for salesmen.'
+        self.fields['manager'].help_text = 'Required for monitors.'
         if actor and self.instance.pk == actor.pk and (actor.is_superuser or actor.role_code() == Role.ADMIN):
             self.fields['role'].disabled = True
             self.fields['is_active'].disabled = True
@@ -231,7 +279,7 @@ class UserEditForm(BootstrapMixin, forms.ModelForm):
 class SaleForm(BootstrapMixin, forms.ModelForm):
     class Meta:
         model = Sale
-        fields = ['sale_type', 'customer', 'salesman', 'notes']
+        fields = ['sale_type', 'pricing_mode', 'customer', 'salesman', 'notes']
         widgets = {
             'customer': forms.HiddenInput(),
             'notes': forms.Textarea(attrs={'rows': 2}),
@@ -286,15 +334,15 @@ class SaleItemForm(BootstrapMixin, forms.ModelForm):
         model = SaleItem
         fields = ['product', 'quantity', 'unit_price', 'discount']
         widgets = {
-            'quantity': forms.NumberInput(attrs={'step': '0.01', 'min': '0.01'}),
+            'quantity': forms.NumberInput(attrs={'step': '1', 'min': '1', 'inputmode': 'numeric'}),
             'unit_price': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
             'discount': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
         }
 
-    def __init__(self, *args, user=None, sale_type=Sale.CUSTOMER, **kwargs):
+    def __init__(self, *args, user=None, pricing_mode=Sale.WHOLESALE, **kwargs):
         super().__init__(*args, **kwargs)
         self.user = user
-        self.sale_type = sale_type or Sale.CUSTOMER
+        self.pricing_mode = pricing_mode or Sale.WHOLESALE
         self.fields['product'].queryset = Product.objects.filter(is_active=True)
         if user and not can_override_price(user):
             self.fields['unit_price'].required = False
@@ -317,10 +365,16 @@ class SaleItemForm(BootstrapMixin, forms.ModelForm):
         submitted = self.cleaned_data.get('unit_price')
         product = self.cleaned_data.get('product')
         if self.user and not can_override_price(self.user) and product:
-            if self.instance.pk and self.instance.product_id == product.id:
-                return self.instance.unit_price
-            return product.standard_price(self.sale_type)
+            return product.price_for_mode(self.pricing_mode)
         return submitted
+
+    def clean_quantity(self):
+        quantity = self.cleaned_data.get('quantity')
+        if quantity is not None and (
+            quantity < 1 or quantity != quantity.to_integral_value()
+        ):
+            raise forms.ValidationError('Quantity must be a positive whole number of cases.')
+        return quantity
 
     def clean_discount(self):
         discount = self.cleaned_data.get('discount') or 0
@@ -335,6 +389,92 @@ SaleItemFormSet = inlineformset_factory(
     Sale,
     SaleItem,
     form=SaleItemForm,
+    extra=1,
+    can_delete=True,
+    min_num=1,
+    validate_min=True,
+)
+
+
+class MonitorReportForm(BootstrapMixin, forms.ModelForm):
+    class Meta:
+        model = MonitorReport
+        fields = ['monitor', 'report_date', 'salesman', 'summary']
+        widgets = {
+            'report_date': forms.DateInput(attrs={'type': 'date'}),
+            'summary': forms.Textarea(attrs={'rows': 3, 'placeholder': 'Overall notes or route summary'}),
+        }
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+        monitors = User.objects.filter(role__code=Role.MONITOR, is_active=True).select_related('zone', 'manager')
+        salesmen = User.objects.filter(role__code=Role.SALESMAN, is_active=True).select_related('zone')
+        if user and is_monitor(user):
+            monitors = monitors.filter(pk=user.pk)
+            salesmen = salesmen.filter(zone_id=user.zone_id)
+            self.fields['monitor'].initial = user
+            self.fields['monitor'].widget = forms.HiddenInput()
+        elif user and is_manager(user):
+            monitors = monitors.filter(manager=user)
+            salesmen = salesmen.filter(zone_id__in=monitors.values('zone_id'))
+        elif user and not is_admin(user):
+            monitors = monitors.none()
+            salesmen = salesmen.none()
+        self.fields['monitor'].queryset = monitors
+        self.fields['salesman'].queryset = salesmen
+        self.apply_bootstrap()
+
+    def clean(self):
+        cleaned = super().clean()
+        monitor = cleaned.get('monitor')
+        salesman = cleaned.get('salesman')
+        if self.user and is_monitor(self.user):
+            cleaned['monitor'] = self.user
+            monitor = self.user
+        if monitor and salesman and monitor.zone_id != salesman.zone_id:
+            self.add_error('salesman', 'Select a salesman from the monitor\'s assigned zone.')
+        if self.user and is_manager(self.user) and monitor and monitor.manager_id != self.user.id:
+            self.add_error('monitor', 'Select one of the monitors who reports to you.')
+        return cleaned
+
+
+class MonitorVisitForm(BootstrapMixin, forms.ModelForm):
+    class Meta:
+        model = MonitorVisit
+        fields = [
+            'customer',
+            'shop_name',
+            'has_company_chiller',
+            'customer_comment',
+            'shopkeeper_comment',
+            'observations',
+            'follow_up_required',
+        ]
+        widgets = {
+            'customer_comment': forms.Textarea(attrs={'rows': 2}),
+            'shopkeeper_comment': forms.Textarea(attrs={'rows': 2}),
+            'observations': forms.Textarea(attrs={'rows': 2}),
+        }
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['customer'].queryset = (
+            visible_customers(
+                Customer.objects.filter(is_active=True).select_related('zone', 'assigned_salesman'),
+                user,
+            ).order_by('customer_code')
+            if user else Customer.objects.none()
+        )
+        self.fields['customer'].required = False
+        self.fields['customer'].empty_label = 'Select registered customer (optional)'
+        self.apply_bootstrap()
+
+
+MonitorVisitFormSet = inlineformset_factory(
+    MonitorReport,
+    MonitorVisit,
+    form=MonitorVisitForm,
     extra=1,
     can_delete=True,
     min_num=1,
