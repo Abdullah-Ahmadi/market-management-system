@@ -949,7 +949,7 @@ def sales_csv(request):
     response['Content-Disposition'] = f'attachment; filename="mms-sales-{start}-to-{end}.csv"'
     writer = csv.writer(response)
     writer.writerow(
-        ['Sale #', 'Date/time', 'Status', 'Type', 'Salesman', 'Customer Code', 'Customer', 'Total']
+        ['Sale #', 'Date/time', 'Status', 'Type', 'Pricing', 'Salesman', 'Customer Code', 'Customer', 'Total']
     )
     for s in qs:
         writer.writerow(
@@ -958,6 +958,7 @@ def sales_csv(request):
                 timezone.localtime(s.transaction_time).isoformat(sep=' ', timespec='minutes'),
                 s.status,
                 s.sale_type,
+                s.get_pricing_mode_display(),
                 s.salesman.display_name,
                 s.customer.customer_code if s.customer else '',
                 s.customer.full_name if s.customer else 'General / Walk-in',
@@ -1074,7 +1075,7 @@ def sales_excel(request):
         ])
 
     sale_rows = [[
-        'Sale #', 'Dispatch #', 'Date/time', 'Status', 'Type', 'Salesman', 'Zone',
+        'Sale #', 'Dispatch #', 'Date/time', 'Status', 'Type', 'Pricing', 'Salesman', 'Zone',
         'Customer Code', 'Customer', 'Cases', f'Cash ({settings.currency})'
     ]]
     sales_for_export = qs.order_by('transaction_time').annotate(export_cases=Sum('items__quantity'))
@@ -1085,6 +1086,7 @@ def sales_excel(request):
             timezone.localtime(sale.transaction_time).strftime('%Y-%m-%d %H:%M'),
             sale.get_status_display(),
             sale.get_sale_type_display(),
+            sale.get_pricing_mode_display(),
             sale.salesman.display_name,
             sale.salesman.zone.code if sale.salesman.zone else '',
             sale.customer.customer_code if sale.customer else '',
