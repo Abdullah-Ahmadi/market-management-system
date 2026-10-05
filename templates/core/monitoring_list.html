@@ -8,7 +8,7 @@
     <select class="form-select" style="max-width:190px" name="zone" data-live-change><option value="">All zones</option>{% for z in zones %}<option value="{{ z.pk }}" {% if zone_id == z.pk|stringformat:'s' %}selected{% endif %}>{{ z.code }} — {{ z.name }}</option>{% endfor %}</select>
     <a class="btn btn-light" href="{% url 'monitoring_list' %}">Reset</a>
   </form>
-  <div class="d-flex gap-2"><a class="btn btn-outline-primary" href="{% url 'monitoring_csv' %}?start={{ start|date:'Y-m-d' }}&end={{ end|date:'Y-m-d' }}">Export CSV</a><a class="btn btn-primary" href="{% url 'monitoring_create' %}">+ New report</a></div>
+  <div class="d-flex gap-2"><a class="btn btn-outline-primary" href="{% url 'monitoring_csv' %}?start={{ start|date:'Y-m-d' }}&end={{ end|date:'Y-m-d' }}&monitor={{ monitor_id }}&salesman={{ salesman_id }}&zone={{ zone_id }}">Export CSV</a><a class="btn btn-primary" href="{% url 'monitoring_create' %}">+ New report</a></div>
 </div>
 
 <div class="row g-3 mb-4">
